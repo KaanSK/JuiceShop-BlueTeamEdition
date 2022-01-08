@@ -1,0 +1,35 @@
+version: "3.3"
+
+services:
+  juice:
+    image: bkimminich/juice-shop
+    container_name: juice-shop
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.juice.rule=Host(`juice.localhost`)"
+      - "traefik.http.routers.juice.entrypoints=web"
+      - "traefik.http.services.my-service.loadbalancer.server.port=3000"
+
+  traefik:
+    image: "traefik:v2.5"
+    container_name: "traefik"
+    command:
+      - --api.dashboard=true
+      - --accesslog
+      - --accesslog.format=json
+      #- --accesslog.filepath=/data/access.log
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    logging:
+      driver: "splunk"
+      options:
+        splunk-token: ${HUMIO_TOKEN}
+        splunk-url: ${HUMIO_URL}
+        splunk-format: json
