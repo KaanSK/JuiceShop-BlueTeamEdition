@@ -3,21 +3,17 @@ version: "3.7"
 services:
   juice:
     image: bkimminich/juice-shop
-    container_name: juice-shop
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.juice.rule=Host(`juice.localhost`)"
-      - "traefik.http.routers.juice.entrypoints=web"
-      - "traefik.http.services.my-service.loadbalancer.server.port=3000"
+    container_name: juiceshop
+
 
   traefik:
-    image: "traefik:v2.5"
+    image:  traefik:v2.5.6
     container_name: "traefik"
     command:
       - --api.dashboard=true
       - --accesslog
       - --accesslog.format=json
-      #- --accesslog.filepath=/data/access.log
+      - --accesslog.filepath=/var/log/access.log
       - "--api.insecure=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
@@ -27,18 +23,33 @@ services:
       - "8080:8080"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
-    links:
-      - "fluentd"
-    logging:
-      driver: fluentd
-      options:
-        tag: docker.traefik.{{.ID}}
+      - "./traefik/log/:/var/log/"
+  
+  waf:
+    image: owasp/modsecurity-crs:apache
+    container_name: "waf"
+    environment:
+      - MODSEC_AUDIT_LOG=/var/log/modsec_audit.log
+      - PROXY=1
+      - PARANOIA=1
+      - ANOMALY_INBOUND=10
+      - ANOMALY_OUTBOUND=5
+      - BACKEND=http://juiceshop:3000
+    volumes:
+      - "./waf/log/:/var/log/"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.waf-juiceshop.rule=Host(`juiceshop.localhost`)"
+      - "traefik.http.routers.waf-juiceshop.entrypoints=web"
+      - "traefik.http.services.waf-juiceshop.loadbalancer.server.port=80"
 
   fluentd:
     build: ./fluentd
     container_name: fluentd
     volumes:
       - "./fluentd/conf/fluent.conf:/fluentd/etc/fluent.conf"
+      - "./waf/log/modsec_audit.log:/var/log/modsec_audit.log"
+      - "./traefik/log/access.log:/var/log/access.log"
     ports:
       - "24224:24224"
       - "24224:24224/udp"
