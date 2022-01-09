@@ -7,7 +7,6 @@ services:
     links:
       - fluentd
 
-
   traefik:
     image:  traefik:v2.5.6
     container_name: "traefik"
@@ -48,14 +47,18 @@ services:
       - "traefik.http.routers.waf-juiceshop.rule=Host(`juiceshop.localhost`)"
       - "traefik.http.routers.waf-juiceshop.entrypoints=web"
       - "traefik.http.services.waf-juiceshop.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.test-ratelimit.ratelimit.average=50"
+      - "traefik.http.middlewares.test-ratelimit.ratelimit.burst=80"
+      - "traefik.http.middlewares.test-ratelimit.ratelimit.period=1m"
+      - "traefik.http.routers.waf-juiceshop.middlewares=test-ratelimit@docker"
 
   fluentd:
     build: ./fluentd
     container_name: fluentd
     volumes:
       - "./fluentd/conf/fluent.conf:/fluentd/etc/fluent.conf"
-      - "./waf/log/modsec_audit.log:/var/log/modsec_audit.log"
-      - "./traefik/log/access.log:/var/log/access.log"
+      - "./waf/log/:/var/log/modsec/"
+      - "./traefik/log/:/var/log/traefik/"
     ports:
       - "24224:24224"
       - "24224:24224/udp"
