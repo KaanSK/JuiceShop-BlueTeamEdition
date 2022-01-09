@@ -4,6 +4,8 @@ services:
   juice:
     image: bkimminich/juice-shop
     container_name: juiceshop
+    links:
+      - fluentd
 
 
   traefik:
@@ -18,6 +20,8 @@ services:
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
+    links:
+      - fluentd
     ports:
       - "80:80"
       - "8080:8080"
@@ -37,6 +41,8 @@ services:
       - BACKEND=http://juiceshop:3000
     volumes:
       - "./waf/log/:/var/log/"
+    links:
+      - fluentd
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.waf-juiceshop.rule=Host(`juiceshop.localhost`)"
