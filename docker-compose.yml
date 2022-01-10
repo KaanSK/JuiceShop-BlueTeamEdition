@@ -52,16 +52,55 @@ services:
       - "traefik.http.middlewares.test-ratelimit.ratelimit.period=1m"
       - "traefik.http.routers.waf-juiceshop.middlewares=test-ratelimit@docker"
 
+
+  suricata:
+    build: ./suricata
+    container_name: "suricata"
+    network_mode: "host"
+    cap_add:
+      - NET_ADMIN
+      - SYS_NICE
+    command:
+    - "-i eth0"
+    - "-c /config/config.yaml"
+    volumes:
+      - "./waf/log/:/var/log/"
+    links:
+      - fluentd
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./suricata/log:/var/log/suricata"
+      - "./suricata/config.yaml:/config/config.yaml"
+
   fluentd:
     build: ./fluentd
     container_name: fluentd
     volumes:
-      - "./fluentd/conf/fluent.conf:/fluentd/etc/fluent.conf"
+      - "./fluentd/conf:/fluentd/etc"
       - "./waf/log/:/var/log/modsec/"
       - "./traefik/log/:/var/log/traefik/"
+      - "./suricata/log/:/var/log/suricata/"
     ports:
       - "24224:24224"
       - "24224:24224/udp"
     environment:
       HUMIO_TOKEN: ${HUMIO_TOKEN}
       HUMIO_URL: ${HUMIO_URL}
+
+#  crowdsec:
+#    image: crowdsecurity/crowdsec
+#    container_name: "crowdsec"
+#    environment:
+#      - COLLECTIONS=crowdsecurity/traefik
+#      - SCENARIOS=crowdsecurity/apache_log4j2_cve-2021-44228
+#      - DISABLE_ONLINE_API=true
+#    volumes:
+#      - "./traefik/log/:/logs/"
+#      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+#      #- "./crowdsec/crowdsec.db:/var/lib/crowdsec/data/crowdsec.db"
+#      - "./crowdsec/acquis.yaml:/etc/crowdsec/acquis.yaml"
+#      - "./crowdsec/config.yaml:/etc/crowdsec/config.yaml"
+#      - "./crowdsec/online_api_credentials.yaml:/etc/crowdsec/online_api_credentials.yaml"
+#    ports:
+#      - "8081:8080"
+#      - "6060:6060"

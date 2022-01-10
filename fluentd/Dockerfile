@@ -5,7 +5,7 @@ USER root
 
 RUN apk add --no-cache --update --virtual .build-deps curl git \
         sudo build-base ruby-dev \
- && sudo gem install fluent-plugin-splunk-hec fluent-plugin-modsecurity \
+ && sudo gem install fluent-plugin-splunk-hec fluent-plugin-modsecurity fluent-plugin-json-transform \
  && sudo gem sources --clear-all \
  && apk del .build-deps \
  && rm -rf /tmp/* /var/tmp/* /usr/lib/ruby/gems/*/cache/*.gem
