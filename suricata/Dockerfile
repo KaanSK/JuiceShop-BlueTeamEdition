@@ -1,3 +1,4 @@
 FROM jasonish/suricata:latest
 
-RUN suricata-update
+RUN suricata-update update-sources && \
+suricata-update
