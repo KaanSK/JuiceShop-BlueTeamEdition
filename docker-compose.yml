@@ -65,18 +65,32 @@ services:
     - "-c /config/config.yaml"
     volumes:
       - "./waf/log/:/var/log/"
-    links:
-      - fluentd
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - "./suricata/log:/var/log/suricata"
       - "./suricata/config.yaml:/config/config.yaml"
+    depends_on:
+      - fluentd
+  
+  zeek:
+    image: blacktop/zeek
+    container_name: "zeek"
+    volumes:
+      - "./zeek/log:/pcap"
+      - "./zeek/local.zeek:/usr/local/zeek/share/zeek/site/local.zeek"
+    cap_add:
+      - NET_RAW
+    network_mode: "host"
+    command: -i af_packet::eth0 local
+    depends_on:
+      - fluentd
 
   fluentd:
     build: ./fluentd
     container_name: fluentd
     volumes:
       - "./fluentd/conf:/fluentd/etc"
+      - "./zeek/log:/var/log/zeek/"
       - "./waf/log/:/var/log/modsec/"
       - "./traefik/log/:/var/log/traefik/"
       - "./suricata/log/:/var/log/suricata/"
