@@ -1,4 +1,3 @@
 *
 # ... except for this one.
-!apache2*
 !.gitignore
