@@ -1,0 +1,118 @@
+version: "3.7"
+
+services:
+  juice:
+    image: bkimminich/juice-shop
+    container_name: juiceshop
+    links:
+      - fluentd
+
+  traefik:
+    image:  traefik:v2.5.6
+    container_name: "traefik"
+    command:
+      - --api.dashboard=true
+      - --accesslog
+      - --accesslog.format=json
+      - --accesslog.filepath=/var/log/access.log
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    links:
+      - fluentd
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./traefik/log/:/var/log/"
+  
+  waf:
+    image: owasp/modsecurity-crs:apache
+    container_name: "waf"
+    environment:
+      - MODSEC_AUDIT_LOG=/var/log/modsec_audit.log
+      - PROXY=1
+      - PARANOIA=1
+      - ANOMALY_INBOUND=10
+      - ANOMALY_OUTBOUND=5
+      - BACKEND=http://juiceshop:3000
+    volumes:
+      - "./waf/log/:/var/log/"
+    links:
+      - fluentd
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.waf-juiceshop.rule=Host(`juiceshop.localhost`)"
+      - "traefik.http.routers.waf-juiceshop.entrypoints=web"
+      - "traefik.http.services.waf-juiceshop.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.test-ratelimit.ratelimit.average=50"
+      - "traefik.http.middlewares.test-ratelimit.ratelimit.burst=80"
+      - "traefik.http.middlewares.test-ratelimit.ratelimit.period=1m"
+      - "traefik.http.routers.waf-juiceshop.middlewares=test-ratelimit@docker"
+
+
+  suricata:
+    build: ./suricata
+    container_name: "suricata"
+    network_mode: "host"
+    cap_add:
+      - NET_ADMIN
+      - SYS_NICE
+    command:
+    - "-i eth0"
+    - "-c /config/config.yaml"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./suricata/log:/var/log/suricata"
+      - "./suricata/config.yaml:/config/config.yaml"
+    depends_on:
+      - fluentd
+  
+  zeek:
+    image: blacktop/zeek
+    container_name: "zeek"
+    volumes:
+      - "./zeek/log:/pcap"
+      - "./zeek/local.zeek:/usr/local/zeek/share/zeek/site/local.zeek"
+    cap_add:
+      - NET_RAW
+    network_mode: "host"
+    command: -i af_packet::eth0 local
+    depends_on:
+      - fluentd
+
+  fluentd:
+    build: ./fluentd
+    container_name: fluentd
+    volumes:
+      - "./fluentd/conf:/fluentd/etc"
+      - "./zeek/log:/var/log/zeek/"
+      - "./waf/log/:/var/log/modsec/"
+      - "./traefik/log/:/var/log/traefik/"
+      - "./suricata/log/:/var/log/suricata/"
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
+    environment:
+      HUMIO_TOKEN: ${HUMIO_TOKEN}
+      HUMIO_URL: ${HUMIO_URL}
+
+#  crowdsec:
+#    image: crowdsecurity/crowdsec
+#    container_name: "crowdsec"
+#    environment:
+#      - COLLECTIONS=crowdsecurity/traefik
+#      - SCENARIOS=crowdsecurity/apache_log4j2_cve-2021-44228
+#      - DISABLE_ONLINE_API=true
+#    volumes:
+#      - "./traefik/log/:/logs/"
+#      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+#      #- "./crowdsec/crowdsec.db:/var/lib/crowdsec/data/crowdsec.db"
+#      - "./crowdsec/acquis.yaml:/etc/crowdsec/acquis.yaml"
+#      - "./crowdsec/config.yaml:/etc/crowdsec/config.yaml"
+#      - "./crowdsec/online_api_credentials.yaml:/etc/crowdsec/online_api_credentials.yaml"
+#    ports:
+#      - "8081:8080"
+#      - "6060:6060"
